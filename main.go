@@ -104,6 +104,24 @@ var logger =logging.NewNoopLogger()
 var ourVm = evm.NewVM(newParams(), crypto.ZeroAddress, nil, logger)
 var evmState = evm.NewState(appState, blockHashGetter)
 
+
+/*
+Bytecode was taken from Remix IDE, compiler version 0.5.10+commit.5a6ea5b1.Emscripten.clang
+pragma solidity ^0.5.4;
+contract SimpleStorage {
+
+	uint256 data;
+
+	function get() public view returns (uint256) {
+		return data;
+	}
+	
+	function set(uint256 newData) public {
+		data = newData;
+		return;
+	}
+}
+*/
 var code = C.CString("608060405234801561001057600080fd5b5060c68061001f600039" +
 	"6000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c806" +
 	"360fe47b11460375780636d4ce63c146062575b600080fd5b6060600480360360208110" +
@@ -112,13 +130,13 @@ var code = C.CString("608060405234801561001057600080fd5b5060c68061001f600039" +
 	"00805490509056fea265627a7a72305820a191db5c7b4d4786fc90adff0e100187127c5" +
 	"4e0e902d124a41606297538376964736f6c634300050a0032")
 
-var caller = C.CString("Caller")
-var callee = C.CString("callee")
-
 var set = C.CString("60fe47b1" +
 	"0000000000000000000000000000000000000000000000000000000000000001")
 
 var get = C.CString("6d4ce63c")
+
+var caller = C.CString("Caller")
+var callee = C.CString("callee")
 
 func main() {
 	evmState.CreateAccount(toEVMaddress(C.GoString(caller)))
