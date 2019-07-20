@@ -146,6 +146,9 @@ func main() {
 	//VmCall(code, code, caller, callee)
 	output, _ := VmCall(code, code, caller, callee)
 	output, _ = VmCall(output, set, caller, callee)
+	for _, acc := range appState.accounts {
+		fmt.Println(acc.EVMCode)
+	}
 	fmt.Println(appState.accounts)
 	fmt.Println(appState.storage)
 }
