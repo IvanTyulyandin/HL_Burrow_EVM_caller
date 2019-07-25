@@ -3,14 +3,12 @@ package main
 import "C"
 import (
 	"fmt"
-	"github.com/go-kit/kit/log"
 	"github.com/hyperledger/burrow/binary"
 	"github.com/hyperledger/burrow/crypto"
 	"github.com/hyperledger/burrow/execution/evm"
 	"github.com/hyperledger/burrow/logging"
 	"github.com/tmthrgd/go-hex"
 	"golang.org/x/crypto/ripemd160"
-	"os"
 	"strconv"
 )
 
@@ -33,34 +31,33 @@ func blockHashGetter(height uint64) []byte {
 	return binary.LeftPadWord256([]byte(fmt.Sprintf("block_hash_%d", height))).Bytes()
 }
 
-func newLogger() *logging.Logger {
-	return &logging.Logger{
-		Info:   log.NewLogfmtLogger(os.Stdout),
-		Trace:  log.NewLogfmtLogger(os.Stdout),
-		Output: new(log.SwapLogger),
-	}
-}
-
 func VmCall(code, input, caller, callee *C.char) (*C.char, bool) {
 
-	// Convert string into EVM address
-	account1 := toEVMaddress(C.GoString(caller))
+	// Convert strings into EVM addresses
+	evmCaller := toEVMaddress(C.GoString(caller))
+	evmCallee := toEVMaddress(C.GoString(callee))
 
-	// if callee is empty -> new contract creation
-	goCallee := C.GoString(callee)
-	account2 := crypto.Address{}
-
-	if goCallee != "" {
-		// take this assignment from
-		// https://github.com/hyperledger/sawtooth-seth/blob/master/processor/src/seth_tp/handler/handler.go#L159
-		account2 = account1
+	shouldCreateAcc := false
+	if acc, err := appState.GetAccount(evmCallee); err == nil {
+		// If acc evmCallee does not exist — create it in cache.
+		// Below sync with appState is done
+		shouldCreateAcc = acc == nil
+		if shouldCreateAcc {
+			evmState.CreateAccount(evmCallee)
+		}
+	} else {
+		panic("Error while GetAccount")
 	}
 
 	var gas uint64 = 1000000
 	goByteCode := hex.MustDecodeString(C.GoString(code))
 	goInput := hex.MustDecodeString(C.GoString(input))
-	output, err := ourVm.Call(evmState, evm.NewNoopEventSink(), account1, account2,
+	output, err := ourVm.Call(evmState, evm.NewNoopEventSink(), evmCaller, evmCallee,
 		goByteCode, goInput, 0, &gas)
+
+	if shouldCreateAcc {
+		evmState.InitCode(evmCallee, output)
+	}
 
 	if err := evmState.Sync(); err != nil {
 		panic("Sync error")
@@ -91,11 +88,13 @@ func VmCall(code, input, caller, callee *C.char) (*C.char, bool) {
 	}
 }
 
+// Real application state
 var appState = NewIrohaAppState()
-var logger =logging.NewNoopLogger()
-var ourVm = evm.NewVM(newParams(), crypto.ZeroAddress, nil, logger)
+// EVM instance
+var ourVm = evm.NewVM(newParams(), crypto.ZeroAddress, nil, logging.NewNoopLogger())
+// EVM cache. Should be synced with real application state
+// Sync is performed during VmCall
 var evmState = evm.NewState(appState, blockHashGetter)
-
 
 /*
 Bytecode was taken from Remix IDE, compiler version 0.5.10+commit.5a6ea5b1.Emscripten.clang
@@ -132,10 +131,7 @@ var callee = C.CString("callee")
 
 func main() {
 	evmState.CreateAccount(toEVMaddress(C.GoString(caller)))
-	evmState.Sync()
-	fmt.Println(appState.accounts)
-	fmt.Println(appState.storage)
-	//VmCall(code, code, caller, callee)
+
 	output, _ := VmCall(code, code, caller, callee)
 	output, _ = VmCall(output, set, caller, callee)
 	for _, acc := range appState.accounts {
