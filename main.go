@@ -4,7 +4,6 @@ import "C"
 import (
 	"fmt"
 	"github.com/go-kit/kit/log"
-	"github.com/hyperledger/burrow/acm"
 	"github.com/hyperledger/burrow/binary"
 	"github.com/hyperledger/burrow/crypto"
 	"github.com/hyperledger/burrow/execution/evm"
@@ -14,13 +13,6 @@ import (
 	"os"
 	"strconv"
 )
-
-func newAppState() *IrohaAppState {
-	return &IrohaAppState{
-		accounts: make(map[crypto.Address]*acm.Account),
-		storage:  make(map[string][]byte),
-	}
-}
 
 func newParams() evm.Params {
 	return evm.Params{
@@ -99,7 +91,7 @@ func VmCall(code, input, caller, callee *C.char) (*C.char, bool) {
 	}
 }
 
-var appState = newAppState()
+var appState = NewIrohaAppState()
 var logger =logging.NewNoopLogger()
 var ourVm = evm.NewVM(newParams(), crypto.ZeroAddress, nil, logger)
 var evmState = evm.NewState(appState, blockHashGetter)
